@@ -122,9 +122,26 @@ function SetupScreen({ onComplete }) {
 }
 
 // ── Main App ──────────────────────────────────────────────────────────────────
+function useLocalStorage(key, initialValue) {
+  const [storedValue, setStoredValue] = React.useState(() => {
+    try {
+      const item = window.localStorage.getItem(key);
+      return item ? JSON.parse(item) : initialValue;
+    } catch (error) {
+      return initialValue;
+    }
+  });
+  const setValue = (value) => {
+    try {
+      setStoredValue(value);
+      window.localStorage.setItem(key, JSON.stringify(value));
+    } catch (error) {}
+  };
+  return [storedValue, setValue];
+}
 export default function Mizan() {
   // Profile
-  const [profile, setProfile]         = useState(null); // null = setup screen
+  const [profile, setProfile] = useLocalStorage("mizan_profile", null);
   const [showSettings, setShowSettings] = useState(false);
   const [settingsName, setSettingsName] = useState("");
   const [settingsPhone, setSettingsPhone] = useState("");
@@ -153,7 +170,8 @@ export default function Mizan() {
   const [catErr, setCatErr]   = useState("");
 
   // Transactions
-  const [transactions, setTransactions] = useState([]);
+  //
+  const [transactions, setTransactions] = useLocalStorage("mizan_transactions", [])
   const [form, setForm] = useState({
     type:"expense", category:"", amount:"", note:"",
     date: new Date().toISOString().split("T")[0],
@@ -161,10 +179,10 @@ export default function Mizan() {
   const [formError, setFormError] = useState("");
 
   // Budgets — keyed by category name
-  const [budgets, setBudgets] = useState({});
+  const [budgets, setBudgets] = useLocalStorage("mizan_budgets", {});
 
   // Savings goals
-  const [goals, setGoals]               = useState([]);
+  const [goals, setGoals] = useLocalStorage("mizan_goals", []);
   const [showGoalForm, setShowGoalForm] = useState(false);
   const [goalForm, setGoalForm]         = useState({ name:"", targetAmount:"", icon:"🎯", color:"#c9b99a" });
   const [goalFormErr, setGoalFormErr]   = useState("");
