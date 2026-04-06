@@ -1,5 +1,5 @@
 
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 
 const DEFAULT_EXPENSE_CATS = ["Food", "Transport", "Bills", "Health", "Entertainment", "Shopping", "Other"];
 const DEFAULT_INCOME_CATS = ["Salary", "Freelance", "Gift", "Investment", "Other"];
@@ -123,7 +123,7 @@ function SetupScreen({ onComplete }) {
 
 // ── Main App ──────────────────────────────────────────────────────────────────
 function useLocalStorage(key, initialValue) {
-  const [storedValue, setStoredValue] = React.useState(() => {
+  const [storedValue, setStoredValue] = useState(() => {
     try {
       const item = window.localStorage.getItem(key);
       return item ? JSON.parse(item) : initialValue;
