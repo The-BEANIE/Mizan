@@ -145,7 +145,7 @@ export default function Mizan() {
       icon: DEFAULT_ICONS[name] || "💰", type: "income",
     }))
   );
-  const [showCatManager, setShowCatManager] = useState(false);
+  
   const [catTab, setCatTab]   = useState("expense");
   const [newCatName, setNewCatName]   = useState("");
   const [newCatIcon, setNewCatIcon]   = useState("📦");
