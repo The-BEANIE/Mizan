@@ -214,12 +214,12 @@ const Pill = ({ color, icon }) => (
 );
 
 // Divider line
-const Divider = () => (
+
   <div style={{ height: 1, background: `linear-gradient(90deg, transparent, ${T.border} 30%, ${T.border} 70%, transparent)`, margin: "14px 0" }} />
 );
 
 // Section heading
-const SectionHead = ({ label, action, onAction }) => (
+
   <div style={{ ...s.between, marginBottom: 14 }}>
     <span style={{ fontSize: 9, color: T.muted, textTransform: "uppercase", letterSpacing: "0.14em", fontFamily: T.serif }}>{label}</span>
     {action && <button onClick={onAction} style={{ fontSize: 10, color: T.goldSoft, background: "none", border: "none", cursor: "pointer", fontFamily: T.serif, letterSpacing: "0.04em" }}>{action}</button>}
@@ -605,7 +605,7 @@ function Mizan({ pname, setPname }) {
     const m = {}; txMo.filter(t => t.type === "expense").forEach(t => { m[t.category] = (m[t.category] || 0) + t.amount; }); return m;
   }, [txMo]);
   // Monthly income by category (for display only)
-  const incByCat = useMemo(() => {
+  
     const m = {}; txMo.filter(t => t.type === "income").forEach(t => { m[t.category] = (m[t.category] || 0) + t.amount; }); return m;
   }, [txMo]);
   // ALL-TIME income by category — so March salary is still available to allocate in April
