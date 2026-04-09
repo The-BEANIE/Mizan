@@ -214,17 +214,10 @@ const Pill = ({ color, icon }) => (
 );
 
 // Divider line
-const Divider = () => (
-  <div style={{ height: 1, background: `linear-gradient(90deg, transparent, ${T.border} 30%, ${T.border} 70%, transparent)`, margin: "14px 0" }} />
-);
+
 
 // Section heading
-const SectionHead = ({ label, action, onAction }) => (
-  <div style={{ ...s.between, marginBottom: 14 }}>
-    <span style={{ fontSize: 9, color: T.muted, textTransform: "uppercase", letterSpacing: "0.14em", fontFamily: T.serif }}>{label}</span>
-    {action && <button onClick={onAction} style={{ fontSize: 10, color: T.goldSoft, background: "none", border: "none", cursor: "pointer", fontFamily: T.serif, letterSpacing: "0.04em" }}>{action}</button>}
-  </div>
-);
+
 
 function Modal({ title, onClose, children, wide }) {
   useEffect(() => {
