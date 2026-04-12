@@ -214,12 +214,12 @@ const Pill = ({ color, icon }) => (
 );
 
 // Divider line
-
+const Divider = () => (
   <div style={{ height: 1, background: `linear-gradient(90deg, transparent, ${T.border} 30%, ${T.border} 70%, transparent)`, margin: "14px 0" }} />
 );
 
 // Section heading
-
+const SectionHead = ({ label, action, onAction }) => (
   <div style={{ ...s.between, marginBottom: 14 }}>
     <span style={{ fontSize: 9, color: T.muted, textTransform: "uppercase", letterSpacing: "0.14em", fontFamily: T.serif }}>{label}</span>
     {action && <button onClick={onAction} style={{ fontSize: 10, color: T.goldSoft, background: "none", border: "none", cursor: "pointer", fontFamily: T.serif, letterSpacing: "0.04em" }}>{action}</button>}
@@ -593,7 +593,19 @@ function Mizan({ pname, setPname }) {
   const txMo = useMemo(() => txs.filter(t => mo(t.date) === fMonth), [txs, fMonth]);
   const incMo = useMemo(() => txMo.filter(t => t.type === "income").reduce((a, t) => a + t.amount, 0), [txMo]);
   const expMo = useMemo(() => txMo.filter(t => t.type === "expense").reduce((a, t) => a + t.amount, 0), [txMo]);
-  const balMo = incMo - expMo;
+
+  // Balance carried forward from all months BEFORE the selected month
+  // e.g. if March had Rs 10k income and Rs 3k expenses, April carries Rs 7k forward
+  const carriedForward = useMemo(() => {
+    return txs
+      .filter(t => mo(t.date) < fMonth)
+      .reduce((a, t) => a + (t.type === "income" ? t.amount : -t.amount), 0);
+  }, [txs, fMonth]);
+
+  // What you actually have available entering this month = previous balance + this month income
+  const incAvailable = carriedForward + incMo;
+  // Net balance for this month view (carried forward + income - expenses)
+  const balMo = incAvailable - expMo;
 
   // All-time (never resets)
   const allInc = useMemo(() => txs.filter(t => t.type === "income").reduce((a, t) => a + t.amount, 0), [txs]);
@@ -604,11 +616,17 @@ function Mizan({ pname, setPname }) {
   const expByCat = useMemo(() => {
     const m = {}; txMo.filter(t => t.type === "expense").forEach(t => { m[t.category] = (m[t.category] || 0) + t.amount; }); return m;
   }, [txMo]);
-  // Monthly income by category (for display only)
-  
+  // Monthly income by category (for display only — spending breakdown)
+  const incByCat = useMemo(() => {
     const m = {}; txMo.filter(t => t.type === "income").forEach(t => { m[t.category] = (m[t.category] || 0) + t.amount; }); return m;
   }, [txMo]);
-  // ALL-TIME income by category — so March salary is still available to allocate in April
+
+  // SAVINGS LOGIC — carries across all months like a real bank balance
+  // Total already allocated to all goals
+  const totalAllocated = useMemo(() => goals.flatMap(g => g.allocs || []).reduce((a, x) => a + x.amount, 0), [goals]);
+  // Real available balance = all-time income − all-time expenses − already allocated to goals
+  const availableToAllocate = Math.max(0, allBal - totalAllocated);
+  // Per-category breakdown for display (all-time)
   const allTimeIncByCat = useMemo(() => {
     const m = {}; txs.filter(t => t.type === "income").forEach(t => { m[t.category] = (m[t.category] || 0) + t.amount; }); return m;
   }, [txs]);
@@ -780,49 +798,61 @@ function Mizan({ pname, setPname }) {
 
       {/* ── Header ── */}
       <div style={{
-        background: `linear-gradient(180deg, #0c0c0c 0%, ${T.bg} 100%)`,
+        background: `linear-gradient(180deg, #0d0d0d 0%, #090909 100%)`,
         borderBottom: `1px solid ${T.border}`,
         position: "sticky", top: 0, zIndex: 50,
-        boxShadow: `0 1px 0 ${T.border}, 0 4px 24px rgba(0,0,0,0.4)`,
+        boxShadow: `0 2px 20px rgba(0,0,0,0.5)`,
       }}>
-        <div style={{ maxWidth: 860, margin: "0 auto", padding: "14px 16px 0" }}>
+        <div style={{ maxWidth: 860, margin: "0 auto", padding: "12px 16px 0" }}>
 
-          {/* Brand + actions */}
-          <div style={{ ...s.between, marginBottom: 12 }}>
+          {/* Name + balance row */}
+          <div style={{ ...s.between, marginBottom: 10 }}>
+
+            {/* Left: name + spendable balance */}
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{
+                fontSize: 11, color: T.muted,
+                letterSpacing: "0.12em", textTransform: "uppercase",
+                marginBottom: 2, fontFamily: T.serif,
+              }}>{pname}</div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
                 <span style={{
-                  fontSize: 18, fontWeight: "300", color: T.gold,
-                  letterSpacing: "0.22em", textTransform: "uppercase",
-                }}>Mizan</span>
-                <span style={{
-                  width: 1, height: 14,
-                  background: T.goldDim, opacity: 0.4,
-                  display: "inline-block",
-                }}/>
-                <span style={{
-                  fontSize: 11, fontFamily: T.mono,
-                  color: T.goldDim, letterSpacing: "0.06em",
-                }}>مِيزَان</span>
+                  fontSize: 20, fontWeight: "300",
+                  color: availableToAllocate > 0 ? T.text : T.red,
+                  letterSpacing: "-0.02em", lineHeight: 1,
+                }}>{Rs(availableToAllocate)}</span>
+                <span style={{ fontSize: 11, color: T.muted }}>▾</span>
               </div>
-              <div style={{ fontSize: 10, color: T.muted, marginTop: 3, letterSpacing: "0.04em" }}>
-                {greet()},{" "}
-                <span style={{ color: T.goldSoft, fontWeight: "600", letterSpacing: "0.06em" }}>{pname}</span>
+              <div style={{ fontSize: 9, color: T.muted, marginTop: 2, letterSpacing: "0.04em" }}>
+                spendable balance
               </div>
             </div>
-            <div style={s.row}>
+
+            {/* Right: actions */}
+            <div style={{ ...s.row, gap: 6 }}>
               <button
                 onClick={() => { setTxModal(true); setEditTx(null); }}
                 style={{
                   ...s.btn(),
-                  padding: "8px 18px",
+                  padding: "9px 18px",
+                  fontSize: 12,
                   letterSpacing: "0.06em",
-                  fontSize: 11,
-                  borderRadius: 8,
-                  boxShadow: `0 2px 12px ${T.gold}22`,
+                  borderRadius: 24,
+                  boxShadow: `0 2px 14px ${T.gold}28`,
                 }}
               >+ Add</button>
-              <button onClick={() => setProfModal(true)} style={{ ...s.ghost, padding: "7px 11px", borderRadius: 8 }}>⚙</button>
+              <button
+                onClick={() => setProfModal(true)}
+                style={{
+                  background: T.faint,
+                  border: `1px solid ${T.border2}`,
+                  borderRadius: "50%",
+                  width: 36, height: 36,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  cursor: "pointer", fontSize: 14, color: T.muted,
+                  flexShrink: 0,
+                }}
+              >⚙</button>
             </div>
           </div>
 
@@ -881,65 +911,83 @@ function Mizan({ pname, setPname }) {
 
             {/* KPI cards */}
             <div style={{ ...s.g3, marginBottom: 12 }}>
-              {[
-                { label: "Income", val: incMo, color: T.green },
-                { label: "Expenses", val: expMo, color: T.red },
-                { label: "Balance", val: balMo, color: balMo >= 0 ? T.gold : T.red },
-              ].map(({ label, val, color }) => (
-                <div key={label} style={{
-                  ...s.card, marginBottom: 0, textAlign: "center",
-                  borderColor: color + "18",
-                  background: `linear-gradient(160deg, ${color}08, ${T.card})`,
-                }}>
-                  <div style={{ fontSize: 8, color: T.muted, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 6 }}>{label}</div>
-                  <div style={{ fontSize: 14, fontWeight: "600", color, wordBreak: "break-all", letterSpacing: "-0.01em" }}>{RsS(val)}</div>
-                </div>
-              ))}
+              {/* Income card — shows carried-forward balance + this month's income */}
+              <div style={{
+                ...s.card, marginBottom: 0, textAlign: "center",
+                borderColor: T.green + "18",
+                background: `linear-gradient(160deg, ${T.green}08, ${T.card})`,
+              }}>
+                <div style={{ fontSize: 8, color: T.muted, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 6 }}>Available</div>
+                <div style={{ fontSize: 14, fontWeight: "600", color: T.green, wordBreak: "break-all", letterSpacing: "-0.01em" }}>{RsS(incAvailable)}</div>
+                {carriedForward > 0 && (
+                  <div style={{ fontSize: 8, color: T.muted, marginTop: 3 }}>+{RsS(carriedForward)} from before</div>
+                )}
+                {carriedForward === 0 && (
+                  <div style={{ fontSize: 8, color: T.faint, marginTop: 3 }}>this month's income</div>
+                )}
+              </div>
+
+              {/* Expenses card */}
+              <div style={{
+                ...s.card, marginBottom: 0, textAlign: "center",
+                borderColor: T.red + "18",
+                background: `linear-gradient(160deg, ${T.red}08, ${T.card})`,
+              }}>
+                <div style={{ fontSize: 8, color: T.muted, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 6 }}>Expenses</div>
+                <div style={{ fontSize: 14, fontWeight: "600", color: T.red, wordBreak: "break-all", letterSpacing: "-0.01em" }}>{RsS(expMo)}</div>
+                <div style={{ fontSize: 8, color: T.faint, marginTop: 3 }}>this month</div>
+              </div>
+
+              {/* Balance card */}
+              <div style={{
+                ...s.card, marginBottom: 0, textAlign: "center",
+                borderColor: (balMo >= 0 ? T.gold : T.red) + "18",
+                background: `linear-gradient(160deg, ${balMo >= 0 ? T.gold : T.red}08, ${T.card})`,
+              }}>
+                <div style={{ fontSize: 8, color: T.muted, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 6 }}>Balance</div>
+                <div style={{ fontSize: 14, fontWeight: "600", color: balMo >= 0 ? T.gold : T.red, wordBreak: "break-all", letterSpacing: "-0.01em" }}>{RsS(balMo)}</div>
+                <div style={{ fontSize: 8, color: T.faint, marginTop: 3 }}>after expenses</div>
+              </div>
             </div>
 
-            {/* Net worth */}
+            {/* Accounts + All-time summary */}
             <div style={{
               ...s.card,
-              background: `linear-gradient(135deg, #111008 0%, #0c0c0a 60%, #0e0c08 100%)`,
-              border: `1px solid ${T.goldDim}30`,
-              boxShadow: `0 0 40px ${T.gold}06`,
+              background: `linear-gradient(135deg, #111008 0%, #0c0b09 100%)`,
+              border: `1px solid ${T.goldDim}22`,
               marginBottom: 12,
             }}>
-              <div style={{ ...s.between, marginBottom: 10 }}>
-                <div>
-                  <div style={{ fontSize: 9, color: T.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>Net Worth</div>
-                  <div style={{ fontSize: 26, fontWeight: "bold", color: T.gold, letterSpacing: -1 }}>{Rs(netWorth)}</div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 9, color: T.muted, marginBottom: 3 }}>All-Time Balance</div>
-                  <div style={{ fontSize: 16, fontWeight: "bold", color: allBal >= 0 ? T.green : T.red }}>{Rs(allBal)}</div>
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {/* Account balances */}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
                 {accs.map(a => (
-                  <div key={a.id} style={{ background: "#0d0d0d", borderRadius: 8, padding: "5px 10px", border: `1px solid ${a.color}25` }}>
-                    <span style={{ fontSize: 10, color: T.muted }}>{a.icon} {a.name}: </span>
-                    <span style={{ fontSize: 11, fontWeight: "bold", color: a.balance >= 0 ? a.color : T.red }}>{Rs(a.balance)}</span>
+                  <div key={a.id} style={{
+                    background: "#0a0a08",
+                    borderRadius: 10,
+                    padding: "8px 12px",
+                    border: `1px solid ${a.color}20`,
+                    flex: "1 1 auto",
+                  }}>
+                    <div style={{ fontSize: 9, color: T.muted, marginBottom: 3 }}>{a.icon} {a.name}</div>
+                    <div style={{ fontSize: 14, fontWeight: "600", color: a.balance >= 0 ? a.color : T.red }}>
+                      {Rs(a.balance)}
+                    </div>
                   </div>
                 ))}
               </div>
-            </div>
 
-            {/* All-time summary */}
-            <div style={{ ...s.card, marginBottom: 12 }}>
-              <div style={{ ...s.between, marginBottom: 10 }}>
-                <div style={{ fontSize: 9, color: T.muted, textTransform: "uppercase", letterSpacing: "0.12em" }}>All-Time Summary</div>
-                <div style={{ fontSize: 10, color: T.muted }}>{txs.length} transactions</div>
-              </div>
-              <div style={s.g3}>
+              {/* Thin divider */}
+              <div style={{ height: 1, background: `linear-gradient(90deg, transparent, ${T.border} 30%, ${T.border} 70%, transparent)`, marginBottom: 14 }} />
+
+              {/* All-time summary */}
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
                 {[
-                  { label: "Earned", val: allInc, color: T.green },
-                  { label: "Spent", val: allExp, color: T.red },
-                  { label: "Saved", val: allBal, color: allBal >= 0 ? T.gold : T.red },
+                  { label: "Total Earned", val: allInc, color: T.green },
+                  { label: "Total Spent", val: allExp, color: T.red },
+                  { label: `${txs.length} transactions`, val: null, color: T.muted },
                 ].map(({ label, val, color }) => (
                   <div key={label} style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: 9, color: T.muted, marginBottom: 3 }}>{label}</div>
-                    <div style={{ fontSize: 14, fontWeight: "bold", color }}>{RsS(val)}</div>
+                    <div style={{ fontSize: 9, color: T.muted, marginBottom: 3, letterSpacing: "0.04em" }}>{label}</div>
+                    {val !== null && <div style={{ fontSize: 13, fontWeight: "600", color }}>{RsS(val)}</div>}
                   </div>
                 ))}
               </div>
@@ -1204,31 +1252,52 @@ function Mizan({ pname, setPname }) {
         ════════════════════════════════════ */}
         {tab === "savings" && (
           <div>
-            {/* Income pool */}
-            <div style={{ ...s.card, marginBottom: 12 }}>
-              <div style={{ fontSize: 9, color: T.muted, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 12 }}>
-                Total Income Available to Allocate (All-Time)
+            {/* Running balance pool */}
+            <div style={{
+              ...s.card,
+              background: `linear-gradient(135deg, ${availableToAllocate > 0 ? "#0a1a0a" : "#1a0a0a"} 0%, ${T.card} 100%)`,
+              border: `1px solid ${availableToAllocate > 0 ? T.green + "20" : T.red + "20"}`,
+              marginBottom: 12,
+            }}>
+              <div style={{ fontSize: 9, color: T.muted, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 14 }}>
+                Available to Save
               </div>
-              {Object.keys(allTimeIncByCat).length === 0
-                ? <Empty icon="💸" msg="Add income transactions to see available funds." />
-                : incCats.filter(c => allTimeIncByCat[c.name] > 0).map(c => {
-                  const total = allTimeIncByCat[c.name] || 0;
-                  const alloc = allocBySrc[c.name] || 0;
-                  const free = total - alloc;
-                  return (
-                    <div key={c.name} style={{ marginBottom: 10 }}>
-                      <div style={{ ...s.between, fontSize: 12, marginBottom: 3 }}>
-                        <span style={{ color: T.text }}>{c.icon} {c.name}</span>
-                        <span>
-                          <span style={{ color: free > 0 ? T.green : T.red }}>{Rs(free)} free</span>
-                          <span style={{ color: T.faint }}> / {Rs(total)}</span>
-                        </span>
-                      </div>
-                      <Bar pct={pct(alloc, total)} color={c.color} h={4} />
-                    </div>
-                  );
-                })
-              }
+
+              {/* Big balance number */}
+              <div style={{ ...s.between, marginBottom: 16 }}>
+                <div>
+                  <div style={{ fontSize: 28, fontWeight: "600", color: availableToAllocate > 0 ? T.green : T.red, letterSpacing: "-0.02em" }}>
+                    {Rs(availableToAllocate)}
+                  </div>
+                  <div style={{ fontSize: 10, color: T.muted, marginTop: 4 }}>
+                    Your balance after all expenses, carried across every month
+                  </div>
+                </div>
+              </div>
+
+              {/* Breakdown row */}
+              <div style={{ background: T.inputBg, borderRadius: 10, padding: "12px 14px" }}>
+                <div style={{ fontSize: 9, color: T.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>How it's calculated</div>
+                {[
+                  { label: "All-time income", val: allInc, color: T.green, sign: "+" },
+                  { label: "All-time expenses", val: allExp, color: T.red, sign: "−" },
+                  { label: "Already in goals", val: totalAllocated, color: T.muted, sign: "−" },
+                ].map(({ label, val, color, sign }) => (
+                  <div key={label} style={{ ...s.between, fontSize: 12, marginBottom: 6 }}>
+                    <span style={{ color: T.sub }}>{label}</span>
+                    <span style={{ color, fontWeight: "500" }}>{sign} {Rs(val)}</span>
+                  </div>
+                ))}
+                <div style={{ height: 1, background: T.border, margin: "8px 0" }} />
+                <div style={{ ...s.between, fontSize: 13, fontWeight: "600" }}>
+                  <span style={{ color: T.text }}>Free to allocate</span>
+                  <span style={{ color: availableToAllocate > 0 ? T.green : T.red }}>{Rs(availableToAllocate)}</span>
+                </div>
+              </div>
+
+              {txs.filter(t => t.type === "income").length === 0 && (
+                <Empty icon="💸" msg="Add income transactions to start tracking." />
+              )}
             </div>
 
             {/* Goal cards */}
@@ -1555,7 +1624,7 @@ function Mizan({ pname, setPname }) {
       )}
       {allocGoalId && (
         <AllocModal onClose={() => setAllocGoalId(null)} onSave={(amt, src) => allocGoal(allocGoalId, amt, src)}
-          incCats={incCats} incByCat={allTimeIncByCat} allocBySrc={allocBySrc} gc={gc} />
+          availableToAllocate={availableToAllocate} allInc={allInc} allExp={allExp} totalAllocated={totalAllocated} />
       )}
       {accModal && (
         <AccModal onClose={() => { setAccModal(false); setEditAcc(null); }} onSave={saveAcc} initial={editAcc} />
@@ -1684,48 +1753,86 @@ function GoalModal({ onClose, onSave, initial }) {
   );
 }
 
-function AllocModal({ onClose, onSave, incCats, incByCat, allocBySrc, gc }) {
-  const [src, setSrc] = useState("");
+function AllocModal({ onClose, onSave, availableToAllocate, allInc, allExp, totalAllocated }) {
   const [amt, setAmt] = useState("");
+  const [note, setNote] = useState("");
   const [err, setErr] = useState("");
 
   const save = () => {
-    if (!src) { setErr("Select an income source."); return; }
-    const a = parseFloat(amt); if (!a || a <= 0) { setErr("Enter a valid amount."); return; }
-    const avail = Math.max(0, (incByCat[src] || 0) - (allocBySrc[src] || 0));
-    if (a > avail) { setErr(`Only ${Rs(avail)} available from ${src}.`); return; }
-    onSave(a, src);
+    const a = parseFloat(amt);
+    if (!a || a <= 0) { setErr("Enter a valid amount."); return; }
+    if (a > availableToAllocate) {
+      setErr(`You only have ${Rs(availableToAllocate)} available. Earn more or spend less first.`);
+      return;
+    }
+    // Source is "balance" — it comes from the running balance, not a specific category
+    onSave(a, note.trim() || "Balance");
   };
 
   return (
     <Modal title="Allocate to Savings Goal" onClose={onClose}>
-      <div style={{ background: T.inputBg, borderRadius: 8, padding: 12, marginBottom: 14 }}>
-        <div style={{ fontSize: 9, color: T.muted, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.12em" }}>Available Funds (this month)</div>
-        {incCats.map(c => {
-          const avail = Math.max(0, (incByCat[c.name] || 0) - (allocBySrc[c.name] || 0));
-          return (
-            <div key={c.name} style={{ ...s.between, fontSize: 11, marginBottom: 4 }}>
-              <span style={{ color: T.sub }}>{c.icon} {c.name}</span>
-              <span style={{ color: avail > 0 ? T.green : T.faint }}>{Rs(avail)} free</span>
-            </div>
-          );
-        })}
+      {/* Balance breakdown */}
+      <div style={{
+        background: T.inputBg,
+        borderRadius: 10,
+        padding: "14px 16px",
+        marginBottom: 18,
+        border: `1px solid ${availableToAllocate > 0 ? T.green + "20" : T.red + "20"}`,
+      }}>
+        <div style={{ fontSize: 9, color: T.muted, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 12 }}>
+          Your Running Balance
+        </div>
+        {[
+          { label: "Total income (all months)", val: allInc, color: T.green, sign: "+" },
+          { label: "Total expenses (all months)", val: allExp, color: T.red, sign: "−" },
+          { label: "Already in savings goals", val: totalAllocated, color: T.muted, sign: "−" },
+        ].map(({ label, val, color, sign }) => (
+          <div key={label} style={{ ...s.between, fontSize: 11, marginBottom: 6 }}>
+            <span style={{ color: T.sub }}>{label}</span>
+            <span style={{ color }}>{sign} {Rs(val)}</span>
+          </div>
+        ))}
+        <div style={{ height: 1, background: T.border, margin: "10px 0 10px" }} />
+        <div style={{ ...s.between }}>
+          <span style={{ fontSize: 13, color: T.text, fontWeight: "500" }}>Free to allocate</span>
+          <span style={{ fontSize: 18, fontWeight: "700", color: availableToAllocate > 0 ? T.green : T.red }}>
+            {Rs(availableToAllocate)}
+          </span>
+        </div>
       </div>
-      <Field label="Income Source">
-        <select style={s.input} value={src} onChange={e => { setSrc(e.target.value); setErr(""); }}>
-          <option value="">— Select source —</option>
-          {incCats.map(c => {
-            const avail = Math.max(0, (incByCat[c.name] || 0) - (allocBySrc[c.name] || 0));
-            return <option key={c.name} value={c.name}>{c.icon} {c.name} ({Rs(avail)} free)</option>;
-          })}
-        </select>
+
+      <Field label="Amount to Allocate (Rs)">
+        <input
+          style={s.input}
+          type="number"
+          placeholder={`Max: ${Rs(availableToAllocate)}`}
+          value={amt}
+          onChange={e => { setAmt(e.target.value); setErr(""); }}
+          min="0"
+          autoFocus
+        />
       </Field>
-      <Field label="Amount (Rs)">
-        <input style={s.input} type="number" placeholder="0.00" value={amt} onChange={e => { setAmt(e.target.value); setErr(""); }} min="0" />
+      <Field label="Label (optional)">
+        <input
+          style={s.input}
+          placeholder="e.g. March salary surplus, Bonus"
+          value={note}
+          onChange={e => setNote(e.target.value)}
+        />
       </Field>
       <ErrMsg msg={err} />
-      <div style={{ ...s.g2, marginTop: 14 }}>
-        <button style={{ ...s.btn(), width: "100%" }} onClick={save}>Allocate</button>
+      <div style={{ ...s.g2, marginTop: 16 }}>
+        <button
+          style={{
+            ...s.btn(),
+            width: "100%",
+            opacity: availableToAllocate <= 0 ? 0.4 : 1,
+            cursor: availableToAllocate <= 0 ? "not-allowed" : "pointer",
+          }}
+          onClick={save}
+        >
+          Allocate
+        </button>
         <button style={{ ...s.ghost, width: "100%" }} onClick={onClose}>Cancel</button>
       </div>
     </Modal>
